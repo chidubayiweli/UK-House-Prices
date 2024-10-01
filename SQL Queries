@@ -1,0 +1,92 @@
+--Longest consecutive increase in average house prices in 2024
+
+WITH Yearly_Changes AS (
+    -- Step 1: Calculate yearly average price for each region
+    SELECT 
+        Region_Name, 
+        EXTRACT(YEAR FROM Date) AS Year, 
+        AVG(Average_Price) AS Avg_Price
+    FROM 
+        `house-prices-index.UK.Average prices`
+    GROUP BY 
+        Region_Name, Year
+),
+Price_Increases AS (
+    -- Step 2: Use LAG() to get the previous year's price for each region and identify if there was a price increase
+    SELECT 
+        Region_Name, 
+        Year, 
+        Avg_Price,
+        LAG(Avg_Price) OVER (PARTITION BY Region_Name ORDER BY Year) AS Prev_Year_Avg_Price,
+        CASE 
+            WHEN LAG(Avg_Price) OVER (PARTITION BY Region_Name ORDER BY Year) IS NOT NULL 
+                AND Avg_Price > LAG(Avg_Price) OVER (PARTITION BY Region_Name ORDER BY Year) 
+            THEN 1 
+            ELSE 0 
+        END AS Price_Increase
+    FROM 
+        Yearly_Changes
+),
+Consecutive_Increases AS (
+    -- Step 3: Track consecutive increases and group them into streaks
+    SELECT 
+        Region_Name, 
+        Year, 
+        Price_Increase,
+        SUM(CASE WHEN Price_Increase = 0 THEN 1 ELSE 0 END) OVER (PARTITION BY Region_Name ORDER BY Year) AS Increase_Streak_Group
+    FROM 
+        Price_Increases
+),
+Streak_Start_End AS (
+    -- Step 4: Get the start and end years for each consecutive increase streak
+    SELECT 
+        Region_Name, 
+        MIN(Year) AS Streak_Start_Year, 
+        MAX(Year) AS Streak_End_Year, 
+        COUNT(Year) AS Increase_Streak_Length
+    FROM 
+        Consecutive_Increases
+    WHERE 
+        Price_Increase = 1
+    GROUP BY 
+        Region_Name, Increase_Streak_Group
+)
+-- Final query: Filter streaks that end in 2024 and rank regions based on the longest consecutive increase streak
+SELECT 
+    Region_Name, 
+    Increase_Streak_Length AS Longest_Consecutive_Increase, 
+    Streak_Start_Year, 
+    Streak_End_Year
+FROM 
+    Streak_Start_End
+WHERE 
+    Streak_End_Year = 2024
+ORDER BY 
+    Longest_Consecutive_Increase DESC
+LIMIT 10;
+
+--Average house price per house type
+
+SELECT  
+    Region_Name, 
+    EXTRACT(YEAR FROM Date) AS Year, 
+    CAST(ROUND(AVG(Detached_Average_Price),0) AS INT64) AS Detached_Price, 
+    CAST(ROUND(AVG(Semi_Detached_Average_Price),0) AS INT64) AS SemiDetached_Price,
+    CAST(ROUND(AVG(Terraced_Average_Price),0) AS INT64) AS Terraced_Price,
+    CAST(ROUND(AVG(Flat_Average_Price),0) AS INT64) AS Flat_Price
+ FROM `house-prices-index.UK.Average prices property type ` 
+ GROUP BY 
+    Region_Name, Year
+ORDER BY 
+    Year;
+
+--Average house price per year
+
+SELECT Region_Name, 
+    EXTRACT(YEAR FROM Date) AS Year, 
+    CAST(ROUND(AVG(Average_Price))AS INT64) AS Avg_Price 
+FROM `house-prices-index.UK.Average prices`
+GROUP BY 
+    Region_Name, Year
+ORDER BY 
+    Year
