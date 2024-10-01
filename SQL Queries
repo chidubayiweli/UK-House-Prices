@@ -1,4 +1,4 @@
---Longest consecutive increase in average house prices in 2024
+--Longest consecutive increase in average house prices
 
 WITH Yearly_Changes AS (
     -- Step 1: Calculate yearly average price for each region
